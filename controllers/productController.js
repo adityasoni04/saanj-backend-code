@@ -162,12 +162,10 @@ const updateProduct = async (req, res) => {
       }
     }
 
-    // --- 2. Parse Features (FIXED for Nested Arrays) ---
+    // --- 2. Parse Features (Fixed) ---
     let features = product.features;
     if (req.body.features !== undefined) {
       let rawFeatures = req.body.features;
-
-      // Handle string input (FormData often sends JSON strings)
       if (typeof rawFeatures === 'string') {
         try {
           if (rawFeatures.trim().startsWith('[')) {
@@ -179,25 +177,19 @@ const updateProduct = async (req, res) => {
           rawFeatures = [rawFeatures];
         }
       }
-
-      // Ensure array
-      if (!Array.isArray(rawFeatures)) {
-        rawFeatures = [rawFeatures];
-      }
-
-      // THE FIX: Flatten nested arrays (e.g. [[["Text"]]]) into a single list
-      features = rawFeatures
-        .flat(Infinity)
-        .map(item => String(item).trim())
-        .filter(item => item.length > 0);
+      if (!Array.isArray(rawFeatures)) rawFeatures = [rawFeatures];
+      features = rawFeatures.flat(Infinity).map(item => String(item).trim()).filter(item => item.length > 0);
     }
 
-    // --- 3. Handle Images (Unchanged) ---
+    // --- 3. Handle Images (FIXED & ROBUST) ---
+    console.log('Files received:', req.files); // <--- DEBUG LOG 1
+
     let existingImageUrls = req.body.existingImageUrls || [];
     if (typeof existingImageUrls === 'string') {
       existingImageUrls = [existingImageUrls];
     }
 
+    // Delete removed images from Cloudinary
     const urlsToDelete = product.images.filter(url => !existingImageUrls.includes(url));
     if (urlsToDelete.length > 0) {
       const publicIdsToDelete = urlsToDelete.map(getPublicIdFromUrl).filter(id => id);
@@ -206,13 +198,20 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // Start with the existing images the user kept
     let updatedImageUrls = product.images.filter(url => existingImageUrls.includes(url));
+
+    // Add NEW uploaded images
     if (req.files && req.files.length > 0) {
-      const newImageUrls = req.files.map(file => file.path);
+      const newImageUrls = req.files.map(file => {
+        // CRITICAL FIX: Check both 'path' and 'secure_url'
+        return file.path || file.secure_url; 
+      });
+      console.log('New Image URLs:', newImageUrls); // <--- DEBUG LOG 2
       updatedImageUrls = [...updatedImageUrls, ...newImageUrls];
     }
 
-    // --- 4. Update Product Fields (Unchanged) ---
+    // --- 4. Update Product Fields ---
     product.productName = req.body.productName ?? product.productName;
     product.description = req.body.description ?? product.description;
     product.price = req.body.price ?? product.price;
@@ -221,11 +220,13 @@ const updateProduct = async (req, res) => {
     product.originalPrice = req.body.originalPrice ?? product.originalPrice;
     product.stock = req.body.stock ?? product.stock;
     product.featured = req.body.featured ?? product.featured;
+    
+    // Assign the merged array
     product.images = updatedImageUrls;
+    
     product.features = features;
     product.specifications = specifications;
 
-    // --- 5. Save and Respond ---
     const updatedProduct = await product.save();
     res.json(updatedProduct);
 
