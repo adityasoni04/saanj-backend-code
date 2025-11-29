@@ -37,19 +37,14 @@ import {
   deleteProduct,
   getProductById,
   getAdminProducts,
+  getFeaturedProducts
 } from '../controllers/productController.js';
 import upload from '../middleware/uploadMiddleware.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
-
-// Middleware for handling image uploads
 const imageUpload = upload.array('images', 10);
-
 // --- ADMIN ROUTES ---
-// These are specific and must come first
-
-// GET /api/products/admin (For admin panel, paginated)
 router.route('/admin').get(protect, admin, getAdminProducts);
 
 // POST /api/products (Create a new product)
@@ -66,6 +61,7 @@ router.route('/:productId')
 // GET /api/products (For search and category pages)
 router.route('/').get(getProducts);
 
+router.get('/featured', getFeaturedProducts);
 // GET /api/products/:productId (Get a single product)
 // This is last so 'admin' isn't mistaken for a productId
 router.route('/:productId').get(getProductById);

@@ -150,6 +150,8 @@ const updateProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
+
+    // --- 1. Parse Specifications (Unchanged) ---
     let specifications = product.specifications;
     if (req.body.specifications !== undefined) {
       try {
@@ -159,20 +161,38 @@ const updateProduct = async (req, res) => {
         return res.status(400).json({ message: `Invalid specifications format: ${e.message}` });
       }
     }
+
+    // --- 2. Parse Features (FIXED for Nested Arrays) ---
     let features = product.features;
     if (req.body.features !== undefined) {
-      features = req.body.features || [];
-      if (typeof features === 'string') {
-        if (features.startsWith('[') && features.endsWith(']')) {
-          try { features = JSON.parse(features); } catch (e) { features = [features]; }
-        } else {
-          features = [features];
+      let rawFeatures = req.body.features;
+
+      // Handle string input (FormData often sends JSON strings)
+      if (typeof rawFeatures === 'string') {
+        try {
+          if (rawFeatures.trim().startsWith('[')) {
+            rawFeatures = JSON.parse(rawFeatures);
+          } else {
+            rawFeatures = [rawFeatures];
+          }
+        } catch (e) {
+          rawFeatures = [rawFeatures];
         }
       }
-      if (!Array.isArray(features)) {
-        features = [];
+
+      // Ensure array
+      if (!Array.isArray(rawFeatures)) {
+        rawFeatures = [rawFeatures];
       }
+
+      // THE FIX: Flatten nested arrays (e.g. [[["Text"]]]) into a single list
+      features = rawFeatures
+        .flat(Infinity)
+        .map(item => String(item).trim())
+        .filter(item => item.length > 0);
     }
+
+    // --- 3. Handle Images (Unchanged) ---
     let existingImageUrls = req.body.existingImageUrls || [];
     if (typeof existingImageUrls === 'string') {
       existingImageUrls = [existingImageUrls];
@@ -192,7 +212,7 @@ const updateProduct = async (req, res) => {
       updatedImageUrls = [...updatedImageUrls, ...newImageUrls];
     }
 
-    // --- 4. Update Product Fields ---
+    // --- 4. Update Product Fields (Unchanged) ---
     product.productName = req.body.productName ?? product.productName;
     product.description = req.body.description ?? product.description;
     product.price = req.body.price ?? product.price;
@@ -256,5 +276,18 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-export { createProduct, getProducts, getAdminProducts, updateProduct, getProductById, deleteProduct };
+const getFeaturedProducts = async (req, res) => {
+  try {
+    const featuredProducts = await Product.find({ featured: true })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(featuredProducts);
+  } catch (error) {
+    console.error('Error fetching featured products:', error);
+    res.status(500).json({ message: 'Error fetching featured products', error: error.message });
+  }
+};
+
+export { createProduct, getProducts, getAdminProducts, updateProduct, getProductById, getFeaturedProducts, deleteProduct };
 

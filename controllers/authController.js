@@ -30,7 +30,7 @@ export const googleCallback = (req, res) => {
       
       // Send the data to the main window (your React app)
       // IMPORTANT: Change 'http://localhost:3000' if your React app runs on a different port (like 5173 for Vite)
-      window.opener.postMessage(data, 'http://localhost:8080');
+      window.opener.postMessage(data, 'https://the-saanj.netlify.app/');
       
       // Close this popup window
       window.close();
